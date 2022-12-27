@@ -1,4 +1,4 @@
-#  Copyright 2013-2014 Nokia Solutions and Networks
+    #  Copyright 2013-2014 Nokia Solutions and Networks
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -16,6 +16,10 @@ from sqlalchemy import create_engine, Column, DateTime, ForeignKey, Integer, Met
 from sqlalchemy.sql import and_, select
 from sqlalchemy.exc import IntegrityError
 from dbbot import Logger
+from sqlalchemy.dialects.mysql import LONGTEXT
+
+import traceback
+import sys
 
 
 class DatabaseWriter(object):
@@ -86,7 +90,7 @@ class DatabaseWriter(object):
             Column('suite_id', Integer, ForeignKey('suites.id')),
             Column('xml_id', String(64), nullable=False),
             Column('name', String(256), nullable=False),
-            Column('source', String(1024)),
+            Column('source', String(256)),
             Column('doc', Text)
         ), ('name', 'source'))
 
@@ -105,6 +109,7 @@ class DatabaseWriter(object):
             Column('suite_id', Integer, ForeignKey('suites.id'), nullable=False),
             Column('xml_id', String(64), nullable=False),
             Column('name', String(256), nullable=False),
+            # Column('message', Text, nullable=False),
             Column('timeout', String(64)),
             Column('doc', Text)
         ), ('suite_id', 'name'))
@@ -141,7 +146,7 @@ class DatabaseWriter(object):
             Column('keyword_id', Integer, ForeignKey('keywords.id'), nullable=False),
             Column('level', String(64), nullable=False),
             Column('timestamp', DateTime, nullable=False),
-            Column('content', Text, nullable=False),
+            Column('content', LONGTEXT, nullable=False),
             Column('content_hash', String(64), nullable=False)
         ), ('keyword_id', 'level', 'content_hash'))
 
@@ -184,7 +189,10 @@ class DatabaseWriter(object):
     def insert_or_ignore(self, table_name, criteria):
         try:
             self.insert(table_name, criteria)
-        except IntegrityError:
+        except IntegrityError as e:
+            # print(e)
+            # exc_type, exc_value, exc_tb = sys.exc_info()
+            # print(traceback.format_exception(exc_type, exc_value, exc_tb))
             self._verbose('Failed insert to {table} with values {values}'.format(table=table_name,
                                                                                  values=list(criteria.values())))
 

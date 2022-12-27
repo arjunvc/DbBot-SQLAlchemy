@@ -86,7 +86,7 @@ class RobotResultsParser(object):
         self._db.insert_or_ignore('tag_status', {
             'test_run_id': test_run_id,
             'name': stat.name,
-            'critical': int(stat.critical),
+            'critical': 0,
             'elapsed': getattr(stat, 'elapsed', None),
             'failed': stat.failed,
             'passed': stat.passed
@@ -125,8 +125,8 @@ class RobotResultsParser(object):
         self._db.insert_or_ignore('suite_status', {
             'test_run_id': test_run_id,
             'suite_id': suite_id,
-            'passed': suite.statistics.all.passed,
-            'failed': suite.statistics.all.failed,
+            'passed': suite.statistics.passed,
+            'failed': suite.statistics.failed,
             'elapsed': suite.elapsedtime,
             'status': suite.status
         })
@@ -154,7 +154,7 @@ class RobotResultsParser(object):
             })
         self._parse_test_status(test_run_id, test_id, test)
         self._parse_tags(test.tags, test_id)
-        self._parse_keywords(test.keywords, test_run_id, None, test_id)
+        self._parse_keywords(test.keywords, test_run_id, suite_id, test_id)
 
     def _parse_test_status(self, test_run_id, test_id, test):
         self._db.insert_or_ignore('test_status', {
@@ -173,6 +173,7 @@ class RobotResultsParser(object):
             [self._parse_keyword(keyword, test_run_id, suite_id, test_id, keyword_id) for keyword in keywords]
 
     def _parse_keyword(self, keyword, test_run_id, suite_id, test_id, keyword_id):
+        # print('parsing keyword')
         try:
             keyword_id = self._db.insert('keywords', {
                 'suite_id': suite_id,
@@ -188,27 +189,48 @@ class RobotResultsParser(object):
                 'name': keyword.name,
                 'type': keyword.type
             })
-        self._parse_keyword_status(test_run_id, keyword_id, keyword)
-        self._parse_messages(keyword.messages, keyword_id)
-        self._parse_arguments(keyword.args, keyword_id)
-        self._parse_keywords(keyword.keywords, test_run_id, None, None, keyword_id)
+        # print('parsing keyword done')
+        if keyword.status == 'FAIL':
+            self._parse_keyword_status(test_run_id, keyword_id, keyword)
+
+            try:
+                if type(keyword.messages) is list:
+                    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                    self._parse_messages(keyword.messages, keyword_id)
+                    # self._parse_arguments(keyword.args, keyword_id)
+                    self._parse_keywords(keyword.keywords, test_run_id, suite_id, test_id, keyword_id)
+                else:
+                    print("No keyword called messages")
+
+            except AttributeError as e:
+                print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+                print(keyword)
+                print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+                pass
 
     def _parse_keyword_status(self, test_run_id, keyword_id, keyword):
-        self._db.insert_or_ignore('keyword_status', {
-            'test_run_id': test_run_id,
-            'keyword_id': keyword_id,
-            'status': keyword.status,
-            'elapsed': keyword.elapsedtime
-        })
+        try:
+            self._db.insert_or_ignore('keyword_status', {
+                'test_run_id': test_run_id,
+                'keyword_id': keyword_id,
+                'status': keyword.status,
+                'elapsed': keyword.elapsedtime
+            })
+        except:
+            pass
 
     def _parse_messages(self, messages, keyword_id):
         for message in messages:
-            self._db.insert_or_ignore('messages', {
-                'keyword_id': keyword_id, 'level': message.level,
-                'timestamp': self._format_robot_timestamp(message.timestamp),
-                'content': message.message,
-                'content_hash': self._string_hash(message.message)
-            })
+            try:
+                if message.level == 'FAIL':
+                    self._db.insert_or_ignore('messages', {
+                        'keyword_id': keyword_id, 'level': message.level,
+                        'timestamp': self._format_robot_timestamp(message.timestamp),
+                        'content': message.message,
+                        'content_hash': self._string_hash(message.message)
+                    })
+            except:
+                pass
 
     def _parse_arguments(self, args, keyword_id):
         for arg in args:
@@ -224,4 +246,6 @@ class RobotResultsParser(object):
 
     @staticmethod
     def _string_hash(string):
-        return sha1(string.encode()).hexdigest() if string else None
+        # return sha1(string.encode()).hexdigest() if string else None
+        return sha1(string.encode('utf-8')).hexdigest() if string else None
+
